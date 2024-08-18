@@ -348,8 +348,6 @@ class QNetwork_duelingdqn(nn.Module):
         x_action = torch.concat((hidden,action),1)
         advantage = self.value(x_action)
 
-        
-        
         return val+advantage,val, advantage #* self.action_scale + self.action_bias
 
 
