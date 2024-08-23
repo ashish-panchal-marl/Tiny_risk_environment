@@ -54,7 +54,7 @@ class Args:
     """the lambda for the general advantage estimation"""
     num_minibatches: int = 4
     """the number of mini-batches"""
-    update_epochs: int = 10#4
+    update_epochs: int = 20#4
     """the K epochs to update the policy"""
     norm_adv: bool = True
     """Toggles advantages normalization"""
@@ -74,7 +74,7 @@ class Args:
 
     learning_starts: int = 25e3
     tau: float = 0.005
-    buffer_size: int = 10000
+    buffer_size: int = 60000
     # to be filled in runtime
     batch_size: int = 256
     """the batch size (computed in runtime)"""
@@ -299,7 +299,7 @@ class QNetwork(nn.Module):
 
     def __init__(self, action_space = None, ob_space=None):
         super().__init__()
-        self.network = nn.Sequential(
+        self.networkx = nn.Sequential(
             layer_init(nn.Linear(ob_space+action_space, 256)),
             nn.GELU(),
             #layer_init(nn.Linear(256, 256)),
@@ -313,7 +313,7 @@ class QNetwork(nn.Module):
         #self.actor_2 = nn.Sequential(layer_init(nn.Linear(64, 2), std=0.01), nn.Softmax(dim=1),)
     def forward(self, x,a):
         x = torch.cat([x, a], 1)
-        val = self.network(x)
+        val = self.networkx(x)
         #hidden = self.network(x)
         #logits = self.actor_1(hidden)
         #probs = Categorical(logits=logits)
@@ -326,8 +326,9 @@ class QNetwork(nn.Module):
         return val #action
 
 class QNetwork_duelingdqn(nn.Module):
-    def __init__(self,env, action_space = None, ob_space=None):
-        self.network = nn.Sequential(
+    def __init__(self, action_space = None, ob_space=None):
+        super().__init__()
+        self.networkx = nn.Sequential(
             layer_init(nn.Linear(ob_space, 256)),
             nn.GELU(),
             layer_init(nn.Linear(256, 256)),
@@ -342,13 +343,13 @@ class QNetwork_duelingdqn(nn.Module):
         
     def forward(self, x,action):
         
-        hidden = self.network(x).reshape(-1,64)
+        hidden = self.networkx(x).reshape(-1,64)
         val = self.value(hidden)
 
         x_action = torch.concat((hidden,action),1)
-        advantage = self.value(x_action)
+        advantage = self.advantage(x_action)
 
-        return val+advantage,val, advantage #* self.action_scale + self.action_bias
+        return val+advantage #,val, advantage #* self.action_scale + self.action_bias
 
 
 

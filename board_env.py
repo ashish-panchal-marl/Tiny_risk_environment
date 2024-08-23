@@ -546,6 +546,8 @@ class Board:
         #only one player lives and others dont have anything, its phase 1 and not the 1st cycle
         if len(wins)==1:
             status = wins[0][0]
+
+        
         elif len(wins)==2 and self.cycle !=0 and (0 in wins[:,0]):
             status = wins[:,0][wins[:,0] !=0][0]
         else:
@@ -885,7 +887,7 @@ class raw_env(AECEnv, EzPickle):
         if (
             self.terminations[self.agent_selection] or ( self.agent_selection in self.kill_list ) ):
             end = 3
-        elif(sum(list(self.terminations.values()) ) >=2):
+        elif(sum(list(self.terminations.values()) ) >=(len(self.possible_agents) -1 )):
             end =4
         else:
             legal,end,territory_changes = self.board.take_action(self.agent_selection, action)
@@ -901,7 +903,7 @@ class raw_env(AECEnv, EzPickle):
         if self.verbose :
             print('live_list',self._agent_selector.agent_order,'phase',self._phase_selector.agent_order)
         
-        
+        self.infos[self.agent_selection] = end
         
         not_removed = self.handle_post_cycle()#self.handle_terminations()
         
