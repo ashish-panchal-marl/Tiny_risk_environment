@@ -516,7 +516,12 @@ class Board:
                         if self.verbose :
                             print('termination --',self.env_.terminations)
                         self.territory_changes[agent_a] += 1
-                        self.territory_changes[agent_b] -= 100#50
+                        #self.territory_changes[agent_b] -= 100#50
+                        
+                        for ag_i,ag_term in self.env_.terminations.items():
+                            if ag_term: #this means the penalization is proportional to how early you died. meaning the worse that can happen is (total agent count -1 )*-100
+                                self.territory_changes[ag_i] -=100
+                        
         
         else:
             loss = min(territory_b[1]-1,territory_a[1]-1)
@@ -537,7 +542,10 @@ class Board:
                         self.env_.terminations[i] =True
                         if self.verbose :
                             print('termination --2',self.env_.terminations)
-                        self.territory_changes[i] -= 100#50
+                        #self.territory_changes[i] -= 100#50
+                        for ag_i,ag_term in self.env_.terminations.items():
+                            if ag_term: #this means the penalization is proportional to how early you died. meaning the worse that can happen is (total agent count -1 )*-100
+                                self.territory_changes[ag_i] -=100
                         
         
     def game_status(self):

@@ -325,15 +325,53 @@ class QNetwork(nn.Module):
 
         return val #action
 
+
+# ALGO LOGIC: initialize agent here:
+class QNetwork_small(nn.Module):
+
+    def __init__(self, action_space = None, ob_space=None):
+        super().__init__()
+        self.networkx = nn.Sequential(
+            layer_init(nn.Linear(ob_space+action_space, 64)),
+            nn.GELU(),
+            #layer_init(nn.Linear(256, 256)),
+            #nn.GELU(),
+            layer_init(nn.Linear(64, 32)),
+            nn.GELU(),
+            layer_init(nn.Linear(32, 1)),
+            nn.GELU(),
+        )
+        #self.actor_1 = layer_init(nn.Linear(64, action_space), std=0.01)
+        #self.actor_2 = nn.Sequential(layer_init(nn.Linear(64, 2), std=0.01), nn.Softmax(dim=1),)
+    def forward(self, x,a):
+        x = torch.cat([x, a], 1)
+        val = self.networkx(x)
+        #hidden = self.network(x)
+        #logits = self.actor_1(hidden)
+        #probs = Categorical(logits=logits)
+
+        #action_1 = probs.sample()[:,None]
+        #action_2 = self.actor_2(hidden)[:,[0]]
+
+        #action = torch.concat((action_1,action_2),1)
+
+        return val #action
+
+
+
+
 class QNetwork_duelingdqn(nn.Module):
     def __init__(self, action_space = None, ob_space=None):
         super().__init__()
         self.networkx = nn.Sequential(
             layer_init(nn.Linear(ob_space, 256)),
+            nn.LayerNorm(256),
             nn.GELU(),
             layer_init(nn.Linear(256, 256)),
+            nn.LayerNorm(256),
             nn.GELU(),
             layer_init(nn.Linear(256, 64)),
+            nn.LayerNorm(64),
             nn.GELU(),
             #layer_init(nn.Linear(64, 64)),
             #nn.GELU(),
@@ -363,10 +401,13 @@ class Actor_ddqn(nn.Module):
 
         self.network = nn.Sequential(
             layer_init(nn.Linear(ob_space, 256)),
+            nn.LayerNorm(256),
             nn.GELU(),
             layer_init(nn.Linear(256, 256)),
+            nn.LayerNorm(256),
             nn.GELU(),
             layer_init(nn.Linear(256, 64)),
+            nn.LayerNorm(64),
             nn.GELU(),
             #layer_init(nn.Linear(64, 64)),
             #nn.GELU(),
@@ -385,7 +426,7 @@ class Actor_ddqn(nn.Module):
             "action_bias", torch.tensor((env.action_space(1).high + env.action_space(1).low) / 2.0, dtype=torch.float32)
         )
 
-    def forward(self, x):
+    def forward(self, x, return_prob=False):
         
         hidden = self.network(x)
         logits = self.actor_1(hidden)
@@ -395,9 +436,104 @@ class Actor_ddqn(nn.Module):
         action_2 = self.actor_2(hidden)[:,[0]]
 
         action = torch.concat((action_1,action_2),1)
+        if return_prob==1:
+            probs_ = probs.probs*action_2
+            
+            return action, probs_
+        elif return_prob ==2:
+            return action, probs.probs
+        else:
+            return action#* self.action_scale + self.action_bias
 
-        return action#* self.action_scale + self.action_bias
 
+
+
+
+
+class QNetwork_duelingdqn_small(nn.Module):
+    def __init__(self, action_space = None, ob_space=None):
+        super().__init__()
+        self.networkx = nn.Sequential(
+            layer_init(nn.Linear(ob_space, 64)),
+            nn.LayerNorm(64),
+            nn.GELU(),
+            layer_init(nn.Linear(64, 64)),
+            nn.LayerNorm(64),
+            nn.GELU(),
+            layer_init(nn.Linear(64, 32)),
+            nn.LayerNorm(32),
+            nn.GELU(),
+            #layer_init(nn.Linear(64, 64)),
+            #nn.GELU(),
+        )
+        self.value = layer_init(nn.Linear(32, 1), std=0.01)
+        self.advantage = layer_init(nn.Linear(32+action_space, 1), std=0.01)
+        
+    def forward(self, x,action):
+        
+        hidden = self.networkx(x).reshape(-1,32)
+        val = self.value(hidden)
+
+        x_action = torch.concat((hidden,action),1)
+        advantage = self.advantage(x_action)
+
+        return val+advantage #,val, advantage #* self.action_scale + self.action_bias
+
+
+
+class Actor_ddqn_small(nn.Module):
+    def __init__(self,env, action_space = None, ob_space=None):
+        super().__init__()
+        #self.fc1 = nn.Linear(ob_space, 256)
+        #self.fc2 = nn.Linear(256, 256)
+        #self.fc_mu = nn.Linear(256, action_space)
+
+
+        self.network = nn.Sequential(
+            layer_init(nn.Linear(ob_space, 64)),
+            nn.LayerNorm(64),
+            nn.GELU(),
+            layer_init(nn.Linear(64, 64)),
+            nn.LayerNorm(64),
+            nn.GELU(),
+            layer_init(nn.Linear(64, 32)),
+            nn.LayerNorm(32),
+            nn.GELU(),
+            #layer_init(nn.Linear(64, 64)),
+            #nn.GELU(),
+        )
+        self.actor_1 = layer_init(nn.Linear(32, action_space), std=0.01)
+        self.actor_2 = nn.Sequential(layer_init(nn.Linear(32, 2), std=0.01), nn.Softmax(dim=1),)
+
+
+
+        
+        # action rescaling
+        self.register_buffer(
+            "action_scale", torch.tensor((env.action_space(1).high - env.action_space(1).low) / 2.0, dtype=torch.float32)
+        )
+        self.register_buffer(
+            "action_bias", torch.tensor((env.action_space(1).high + env.action_space(1).low) / 2.0, dtype=torch.float32)
+        )
+
+    def forward(self, x, return_prob=False):
+        
+        hidden = self.network(x)
+        logits = self.actor_1(hidden)
+        probs = Categorical(logits=logits)
+
+        action_1 = probs.sample()[:,None]
+        action_2 = self.actor_2(hidden)[:,[0]]
+
+        action = torch.concat((action_1,action_2),1)
+        if return_prob==1:
+            probs_ = probs.probs*action_2
+            
+            return action, probs_
+        elif return_prob ==2:
+            return action, probs.probs
+        else:
+            return action#* self.action_scale + self.action_bias
 
 
     
@@ -408,6 +544,23 @@ class Actor_ddqn(nn.Module):
 def linear_schedule(start_e: float, end_e: float, duration: int, t: int):
     slope = (end_e - start_e) / duration
     return max(slope * t + start_e, end_e)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
