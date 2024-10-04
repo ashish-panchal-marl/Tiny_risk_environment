@@ -148,11 +148,7 @@ class DecisionTransformer(nn.Module):
         #self.predict_rtg = torch.nn.Linear(h_dim, 1)
         self.predict_rtg = layer_init(torch.nn.Linear(h_dim, 1#act_dim
                                                              ), std=0.01)
-        
-        #removing this
-        #self.predict_state = layer_init(torch.nn.Linear(h_dim, state_dim), std=0.01)
-        
-        
+        self.predict_state = layer_init(torch.nn.Linear(h_dim, state_dim), std=0.01)
         self.predict_action = nn.Sequential(
             *([layer_init(nn.Linear(h_dim, act_dim), std=0.01)] + ([nn.Tanh()] if use_action_tanh else []))
         )
@@ -204,9 +200,8 @@ class DecisionTransformer(nn.Module):
         
         # stack rtg, states and actions and reshape sequence as
         # (r1, s1, a1, r2, s2, a2 ...)
-        #MADE a change (s1,a1,r1,s2,r2,a2....)
         h = torch.stack(
-            (state_embeddings, action_embeddings,returns_embeddings), dim=1
+            (returns_embeddings, state_embeddings, action_embeddings), dim=1
         ).permute(0, 2, 1, 3).reshape(B, 3 * T, self.h_dim)
 
         h = self.embed_ln(h)
@@ -233,38 +228,18 @@ class DecisionTransformer(nn.Module):
         # h[:, 1, t] is conditioned on r_0, s_0, a_0 ... r_t, s_t
         # h[:, 2, t] is conditioned on r_0, s_0, a_0 ... r_t, s_t, a_t
         h = h.reshape(B, T, 3, self.h_dim).permute(0, 2, 1, 3)
-        ## get predictions
-        #return_preds = self.predict_rtg(h[:,2])     # predict next rtg given r, s, a
-        #state_preds = self.predict_state(h[:,2])    # predict next state given r, s, a
-        ##action_preds = self.predict_action(h[:,1])  # predict action given r, s
 
-        ##print(h.shape)
-
-        #action_preds_1 = self.predict_actor_1(h[:,1])
-        #action_preds_2 = self.predict_actor_2(h[:,1])
-        #action_preds = torch.concat((action_preds_1,action_preds_2),axis =2)
-    
-
-        # MADE changes
-        # h[:, 0, t] is conditioned on s_0, a_0 r_0, ... s_t
-        # h[:, 1, t] is conditioned on s_0, a_0 r_0, ... s_t, a_t
-        # h[:, 2, t] is conditioned on s_0, a_0 r_0, ... s_t, a_t, r_t
-        
         # get predictions
-        return_preds = self.predict_rtg(h[:,2])     # predict next rtg given s, a,
-        
-        
-        #state_preds = self.predict_state(h[:,1])    # predict next state given s, a #probably dont want this
+        return_preds = self.predict_rtg(h[:,2])     # predict next rtg given r, s, a
+        state_preds = self.predict_state(h[:,2])    # predict next state given r, s, a
         #action_preds = self.predict_action(h[:,1])  # predict action given r, s
 
         #print(h.shape)
 
-        action_preds_1 = self.predict_actor_1(h[:,0])
-        action_preds_2 = self.predict_actor_2(h[:,0])
+        action_preds_1 = self.predict_actor_1(h[:,1])
+        action_preds_2 = self.predict_actor_2(h[:,1])
         action_preds = torch.concat((action_preds_1,action_preds_2),axis =2)
     
-
-        #return state_preds, action_preds, return_preds
-        return action_preds, return_preds
+        return state_preds, action_preds, return_preds
 
 
