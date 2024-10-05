@@ -124,7 +124,7 @@ class DecisionTransformer(nn.Module):
         self.h_dim = h_dim
 
         ### transformer blocks
-        input_seq_len = 3 * context_len
+        input_seq_len = 4 * context_len
         blocks = [Block(h_dim, input_seq_len, n_heads, drop_p) for _ in range(n_blocks)]
         self.transformer = nn.Sequential(*blocks)
 
@@ -160,7 +160,7 @@ class DecisionTransformer(nn.Module):
 
 
         self.predict_actor_1 = layer_init(nn.Linear(h_dim, act_dim), std=0.01)
-        self.predict_actor_2 = layer_init(nn.Linear(h_dim, 2), std=0.01)
+        self.predict_actor_2 = layer_init(nn.Linear(h_dim, 1), std=0.01)
 
         
         
@@ -176,7 +176,7 @@ class DecisionTransformer(nn.Module):
     
 
 
-    def forward(self, timesteps, states, actions, returns_to_go,print_=False,return_logit = False):
+    def forward(self, timesteps, states, actions_1,actions_2, returns_to_go,print_=False,return_logit = False):
 
         B, T, _ = states.shape
         #print(timesteps.device
@@ -190,12 +190,11 @@ class DecisionTransformer(nn.Module):
         #print(actions.shape)
         #print(self.embed_action(actions).squeeze().shape)
         #print(time_embeddings.shape)
+
+        action_embeddings_1 = self.embed_action_1(actions_1[:,:,].long() )+ time_embeddings
+        action_embeddings_2 = self.embed_action_2(actions_2[:,:,None])+ time_embeddings
         
-        action_embeddings = self.embed_action(
-                            torch.concat(
-                            (self.embed_action_1(actions[:,:,0].long()),
-                             self.embed_action_2(actions[:,:,None][:,:,:,1])),axis =2)
-                                )+ time_embeddings
+        
         #embed_action_1
         #embed_action_2
         #embed_action
@@ -212,8 +211,8 @@ class DecisionTransformer(nn.Module):
         # (r1, s1, a1, r2, s2, a2 ...)
         #MADE a change (s1,a1,r1,s2,r2,a2....)
         h = torch.stack(
-            (state_embeddings, action_embeddings,returns_embeddings), dim=1
-        ).permute(0, 2, 1, 3).reshape(B, 3 * T, self.h_dim)
+            (state_embeddings, action_embeddings_1,action_embeddings_2,returns_embeddings), dim=1
+        ).permute(0, 2, 1, 3).reshape(B, 4 * T, self.h_dim)
 
         h = self.embed_ln(h)
         
@@ -238,7 +237,7 @@ class DecisionTransformer(nn.Module):
         # h[:, 0, t] is conditioned on r_0, s_0, a_0 ... r_t
         # h[:, 1, t] is conditioned on r_0, s_0, a_0 ... r_t, s_t
         # h[:, 2, t] is conditioned on r_0, s_0, a_0 ... r_t, s_t, a_t
-        h = h.reshape(B, T, 3, self.h_dim).permute(0, 2, 1, 3)
+        h = h.reshape(B, T, 4, self.h_dim).permute(0, 2, 1, 3)
         ## get predictions
         #return_preds = self.predict_rtg(h[:,2])     # predict next rtg given r, s, a
         #state_preds = self.predict_state(h[:,2])    # predict next state given r, s, a
@@ -253,11 +252,12 @@ class DecisionTransformer(nn.Module):
 
         # MADE changes
         # h[:, 0, t] is conditioned on s_0, a_0 r_0, ... s_t
-        # h[:, 1, t] is conditioned on s_0, a_0 r_0, ... s_t, a_t
-        # h[:, 2, t] is conditioned on s_0, a_0 r_0, ... s_t, a_t, r_t
+        # h[:, 1, t] is conditioned on s_0, a_0 r_0, ... s_t, a_t_1
+        # h[:, 2, t] is conditioned on s_0, a_0 r_0, ... s_t, a_t_1,a_t_2
+        # h[:, 3, t] is conditioned on s_0, a_0 r_0, ... s_t, a_t_1,a_t_2, r_t
         
         # get predictions
-        return_preds = self.predict_rtg(h[:,2])     # predict next rtg given s, a,
+        return_preds = self.predict_rtg(h[:,3])     # predict next rtg given s, a,
         
         
         #state_preds = self.predict_state(h[:,1])    # predict next state given s, a #probably dont want this
@@ -266,17 +266,22 @@ class DecisionTransformer(nn.Module):
         #print(h.shape)
 
         action_preds_1 = self.predict_actor_1(h[:,0])
-        action_preds_2 = self.predict_actor_2(h[:,0])
+        action_preds_2 = self.predict_actor_2(h[:,1])
 
-        if return_logit == False:
+        action_preds_2  = torch.sigmoid(action_preds_2) #nn.Softmax(dim=2)(action_preds_2)
+
+
+        if return_logit == False: #returning actual values
             action_preds_1  =    nn.Tanh()(action_preds_1) if self.use_action_tanh else action_preds_1
-            action_preds_2  =    nn.Softmax(dim=2)(action_preds_2)
-            
+
+            #return action_preds_1, action_preds_2, return_preds
+
+
         
-        action_preds = torch.concat((action_preds_1,action_preds_2),axis =2)
+        #log_prob_2 = torch.log(action_preds_2) + torch.log(1 - action_preds_2)
+        
+        #action_preds = torch.concat((action_preds_1,action_preds_2),axis =2)
     
 
         #return state_preds, action_preds, return_preds
-        return action_preds, return_preds
-
-
+        return action_preds_1, action_preds_2, return_preds #returning logits for action_1 and probability for action_2 
