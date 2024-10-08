@@ -137,7 +137,7 @@ class DecisionTransformer(nn.Module):
         # # discrete actions - maybe i'll not use it for risk... will look into this later
         self.embed_action_1 = torch.nn.Embedding(max_timestep, h_dim) # not act_dim
         self.embed_action_2 = layer_init(torch.nn.Linear(1, h_dim), std=0.01)
-        self.embed_action = torch.nn.Linear(2*h_dim,h_dim)
+        self.embed_action = layer_init( torch.nn.Linear(2*h_dim,h_dim), std=0.01)
         
         self.use_action_tanh = True # False for discrete actions
 
