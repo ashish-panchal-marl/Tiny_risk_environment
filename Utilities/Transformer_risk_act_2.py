@@ -237,6 +237,7 @@ class DecisionTransformer(nn.Module):
         # h[:, 0, t] is conditioned on r_0, s_0, a_0 ... r_t
         # h[:, 1, t] is conditioned on r_0, s_0, a_0 ... r_t, s_t
         # h[:, 2, t] is conditioned on r_0, s_0, a_0 ... r_t, s_t, a_t
+        
         h = h.reshape(B, T, 4, self.h_dim).permute(0, 2, 1, 3)
         ## get predictions
         #return_preds = self.predict_rtg(h[:,2])     # predict next rtg given r, s, a
@@ -267,12 +268,13 @@ class DecisionTransformer(nn.Module):
 
         action_preds_1 = self.predict_actor_1(h[:,0])
         action_preds_2 = self.predict_actor_2(h[:,1])
-
-        action_preds_2  = torch.sigmoid(action_preds_2) #nn.Softmax(dim=2)(action_preds_2)
+        action_preds_2 = torch.sigmoid(action_preds_2) #nn.Softmax(dim=2)(action_preds_2)
+        
 
 
         if return_logit == False: #returning actual values
             action_preds_1  =    nn.Tanh()(action_preds_1) if self.use_action_tanh else action_preds_1
+            
 
             #return action_preds_1, action_preds_2, return_preds
 
