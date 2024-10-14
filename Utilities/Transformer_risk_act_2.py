@@ -20,6 +20,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
+from torch.distributions import Beta,Categorical
+
 """
 this extremely minimal GPT model is based on:
 Misha Laskin's tweet: 
@@ -116,12 +118,13 @@ class Block(nn.Module):
 
 class DecisionTransformer(nn.Module):
     def __init__(self, state_dim, act_dim, n_blocks, h_dim, context_len, 
-                 n_heads, drop_p, max_timestep=4096):
+                 n_heads, drop_p, max_timestep=4096,a2_concentration=5):
         super().__init__()
 
         self.state_dim = state_dim
         self.act_dim = act_dim
         self.h_dim = h_dim
+        self.a2_concentration = a2_concentration
 
         ### transformer blocks
         input_seq_len = 4 * context_len
@@ -160,7 +163,10 @@ class DecisionTransformer(nn.Module):
 
 
         self.predict_actor_1 = layer_init(nn.Linear(h_dim, act_dim), std=0.01)
-        self.predict_actor_2 = layer_init(nn.Linear(h_dim, 1), std=0.01)
+        self.predict_actor_2 = nn.Sequential( layer_init(nn.Linear(h_dim, 1), std=0.01),nn.GELU(),nn.Sigmoid())
+
+
+    
 
         
         
@@ -176,7 +182,7 @@ class DecisionTransformer(nn.Module):
     
 
 
-    def forward(self, timesteps, states, actions_1,actions_2, returns_to_go,print_=False,return_logit = False):
+    def forward(self, timesteps, states, actions_1,actions_2, returns_to_go,print_=False,return_logit = False,return_log_prob_a2 = False,return_og_log_prob_a2 = False):
 
         B, T, _ = states.shape
         #print(timesteps.device
@@ -267,13 +273,32 @@ class DecisionTransformer(nn.Module):
         #print(h.shape)
 
         action_preds_1 = self.predict_actor_1(h[:,0])
-        action_preds_2 = self.predict_actor_2(h[:,1])
-        action_preds_2 = torch.sigmoid(action_preds_2) #nn.Softmax(dim=2)(action_preds_2)
+        action_preds_2 = self.predict_actor_2(h[:,1]).clamp(min=0.01,max = 0.99)
         
 
 
         if return_logit == False: #returning actual values
             action_preds_1  =    nn.Tanh()(action_preds_1) if self.use_action_tanh else action_preds_1
+            
+
+        if return_log_prob_a2:
+            
+            dist = Beta(action_preds_2 * self.a2_concentration, (1 - action_preds_2) * self.a2_concentration)  # Adjust concentration parameters as needed
+            logp_pi_a_2 = dist.log_prob(action_preds_2)
+            
+        elif return_og_log_prob_a2:
+            dist = Beta(action_preds_2 * self.a2_concentration, (1 - action_preds_2) * self.a2_concentration)  # Adjust concentration parameters as needed
+            logp_pi_a_2 = dist.log_prob(actions_2[:,:,None])
+            #dist_entropy_a_2 = dist.entropy()
+            #.clamp(min=0.0001)
+
+            dist_entropy_a_1 = Categorical(nn.Softmax(dim=-1)(action_preds_1[:,-1,:])).entropy()
+
+
+            
+            return action_preds_1, action_preds_2, return_preds,logp_pi_a_2,dist_entropy_a_1#,dist_entropy_a_2
+        else:
+            logp_pi_a_2 = None
             
 
             #return action_preds_1, action_preds_2, return_preds
@@ -286,4 +311,4 @@ class DecisionTransformer(nn.Module):
     
 
         #return state_preds, action_preds, return_preds
-        return action_preds_1, action_preds_2, return_preds #returning logits for action_1 and probability for action_2 
+        return action_preds_1, action_preds_2, return_preds,logp_pi_a_2 #returning logits for action_1 and probability for action_2 

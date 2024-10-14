@@ -38,7 +38,7 @@ class agent_(np.int8):
 
 
 class Board:
-    def __init__(self,default_attack_all = True,render_= False,agent_count = 3,env_=None,use_placement_perc = False,verbose = False):
+    def __init__(self,default_attack_all = True,render_= False,agent_count = 3,env_=None,use_placement_perc = False,verbose = False,max_trials = 4,max_bad_trials =4,troop_lim=51):
         # internally self.board.squares holds a flat representation of tic tac toe board
         # where an empty board is [0, 0, 0, 0, 0, 0, 0, 0, 0]
         # where indexes are column wise order
@@ -61,8 +61,9 @@ class Board:
         self.edge_count = len(self.edges)
         self.attack_dist_higher = NormalDist(mu=0, sigma=1)
         self.attack_dist_lower = NormalDist(mu=0, sigma=0.1)
-        self.max_trials = 4
-        self.max_bad_trials =4
+        self.max_trials = max_trials
+        self.max_bad_trials =max_bad_trials
+        self.troop_lim = troop_lim
         self.base_action_mask =  np.zeros(self.territory_count+self.edge_count +2, dtype='int8')
 
         self.use_placement_perc = use_placement_perc
@@ -153,13 +154,17 @@ class Board:
         
         if phase == 0:
             
-            action_mask =  np.array([1 if i in[agent_sel,0] else 0  for i in self.territories[:,0]]+[0]*self.edge_count +[1,1], dtype='int8')
+            action_mask =  np.array([1 if ((i[0] in[agent_sel,0]) and (i[1]<self.troop_lim)) else 0  
+                                             for i in self.territories]
+                                     +[0]*self.edge_count +[1,1], dtype='int8')
         elif phase ==1:
             action_mask =  np.array([0]*self.territory_count+[ 1 if ((agent_sel == self.territories[i[0],0]) and (self.territories[i[0],1]>1)) and (agent_sel != self.territories[i[1],0]) else 0
                                                                   for i in self.edges] +[1,1], dtype='int8')
 
         else:
-            action_mask =  np.array([0]*self.territory_count+[ 1 if ((agent_sel == self.territories[i[0],0] == self.territories[i[1],0]) and (self.territories[i[0],1]>1)) else 0
+            action_mask =  np.array([0]*self.territory_count+[ 1 if ((agent_sel == self.territories[i[0],0] == self.territories[i[1],0]) 
+                                                                     and (self.territories[i[0],1]>1) 
+                                                                     and (self.territories[i[1],1]<self.troop_lim)  ) else 0
                                                                   for i in self.edges] +[0,1], dtype='int8')
 
         
