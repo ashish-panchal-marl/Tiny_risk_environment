@@ -264,7 +264,8 @@ class DecisionTransformer(nn.Module):
         # h[:, 3, t] is conditioned on s_0, a_0 r_0, ... s_t, a_t_1,a_t_2, r_t
         
         # get predictions
-        return_preds = self.predict_rtg(h[:,3])     # predict next rtg given s, a,
+        return_preds = self.predict_rtg(h[:,0])     # predict next rtg given s, a,
+        #return_preds = self.predict_rtg(h[:,3])     # predict next rtg given s, a,
         
         
         #state_preds = self.predict_state(h[:,1])    # predict next state given s, a #probably dont want this

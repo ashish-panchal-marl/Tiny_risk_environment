@@ -152,9 +152,18 @@ class Board:
 
 
         
+        
+        
         if phase == 0:
+
+            player_tt_cnt = sum(self.territories[:,0] == agent_sel)
             
-            action_mask =  np.array([1 if ((i[0] in[agent_sel,0]) and (i[1]<self.troop_lim)) else 0  
+            action_mask =  np.array([1 if ((   (i[0] == agent_sel) or ((i[0] ==0) #and (self.cycle ==0) 
+                                                                       and (player_tt_cnt ==0) ) #only given a choice of empty territory in 1st cycle and can only start from one place
+                                           
+                                           
+                                           
+                                           ) and (i[1]<self.troop_lim)) else 0  
                                              for i in self.territories]
                                      +[0]*self.edge_count +[1,1], dtype='int8')
         elif phase ==1:
@@ -292,12 +301,16 @@ class Board:
                     edge = self.edges[action[0]-self.territory_count]
                     territory_a = self.territories[edge[0]]
                     
-                    if (territory_a)*action[1] <1:
-                        if self.verbose :
-                            print(2.2)
-                        self.bad_trials +=1
-                        _,end_=self.check_bad_trials(base_end = 0)
-                        return False, end_
+                    try:
+                        if (territory_a)*action[1] <1:
+                            if self.verbose :
+                                print(2.2)
+                            self.bad_trials +=1
+                            _,end_=self.check_bad_trials(base_end = 0)
+                            return False, end_
+                    except:
+                        print(territory_a,action[1])
+                        a()
                 
                 else:    
                 
@@ -330,7 +343,7 @@ class Board:
                         return False, end_
                     if self.territories[
                                     self.edges[action[0]-self.territory_count][0]
-                                    ][1]//(1/action[1]) <1: #assuming nobody dies
+                                    ][1]//(1/action[1]) <1          : #assuming nobody dies and (1//(1/0.999) == 0)
                         if self.verbose :
                             print(4)
                         self.bad_trials +=1
